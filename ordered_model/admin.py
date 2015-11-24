@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 from functools import update_wrapper
 
 # from django.conf import settings
@@ -75,7 +76,7 @@ class OrderedModelAdmin(admin.ModelAdmin):
             'query_string': self.request_query_string
         })
     move_up_down_links.allow_tags = True
-    move_up_down_links.short_description = _(u'Move')
+    move_up_down_links.short_description = _('Move')
 
     def _get_model_info(self):
         # module_name was renamed to model_name in Django 1.7
