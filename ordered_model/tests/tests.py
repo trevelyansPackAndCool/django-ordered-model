@@ -316,6 +316,59 @@ class OrderedModelAdminTest(TestCase):
         self.assertEqual(Item.objects.get(name="item2").order, 0)
 
 
+class OrderWithRespectToAdminTest(TestCase):
+    def setUp(self):
+        user = User.objects.create_superuser("admin", "a@example.com", "admin")
+        self.assertTrue(self.client.login(username="admin", password="admin"))
+        self.t1 = Topping.objects.create(name='tomatoe')
+        self.t2 = Topping.objects.create(name='mozarella')
+        self.t3 = Topping.objects.create(name='anchovy')
+        self.t4 = Topping.objects.create(name='mushrooms')
+        self.t5 = Topping.objects.create(name='ham')
+        self.p1 = Pizza.objects.create(name='Napoli') # tomatoe, mozarella, anchovy
+        self.p2 = Pizza.objects.create(name='Regina') # tomatoe, mozarella, mushrooms, ham
+        # Now put the toppings on the pizza
+        self.p1_t1 = PizzaToppingsThroughModel(pizza=self.p1, topping=self.t1)
+        self.p1_t1.save()
+        self.p1_t2 = PizzaToppingsThroughModel(pizza=self.p1, topping=self.t2)
+        self.p1_t2.save()
+        self.p1_t3 = PizzaToppingsThroughModel(pizza=self.p1, topping=self.t3)
+        self.p1_t3.save()
+        self.p2_t1 = PizzaToppingsThroughModel(pizza=self.p2, topping=self.t1)
+        self.p2_t1.save()
+        self.p2_t2 = PizzaToppingsThroughModel(pizza=self.p2, topping=self.t2)
+        self.p2_t2.save()
+        self.p2_t3 = PizzaToppingsThroughModel(pizza=self.p2, topping=self.t4)
+        self.p2_t3.save()
+        self.p2_t4 = PizzaToppingsThroughModel(pizza=self.p2, topping=self.t5)
+        self.p2_t4.save()
+
+    def test_move_up_down_links(self):
+        res = self.client.get("/admin/tests/pizza/{}/".format(self.p1.id))
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('/admin/tests/topping/1/move-up/', str(res.content))
+        self.assertIn('/admin/tests/item/1/move-down/', str(res.content))
+    def test_saved_order(self):
+        self.assertSequenceEqual(
+            Answer.objects.values_list('pk', 'order'), [
+            (self.q1_a1.pk, 0), (self.q1_a2.pk, 1),
+            (self.q2_a1.pk, 0), (self.q2_a2.pk, 1)
+        ])
+
+    def test_swap(self):
+        with self.assertRaises(ValueError):
+            self.q1_a1.swap([self.q2_a1])
+
+    def test_up(self):
+        self.q1_a2.up()
+        self.assertSequenceEqual(
+            Answer.objects.values_list('pk', 'order'), [
+            (self.q1_a2.pk, 0), (self.q1_a1.pk, 1),
+            (self.q2_a1.pk, 0), (self.q2_a2.pk, 1)
+        ])
+
+
+
 class OrderWithRespectToTestsManyToMany(TestCase):
     def setUp(self):
         self.t1 = Topping.objects.create(name='tomatoe')
