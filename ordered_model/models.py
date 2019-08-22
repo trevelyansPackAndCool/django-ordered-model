@@ -161,7 +161,10 @@ class OrderedModelBase(models.Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._original_order_with_respect_to_fks = {getattr(self, f'{name}_id') for name in self.order_with_respect_to}
+        self._original_order_with_respect_to_values = self.get_ordering_with_respect_to_values()
+
+    def get_ordering_with_respect_to_values(self):
+        return {getattr(self, name) for name in self.order_with_respect_to}
 
     def _get_order_with_respect_to_filter_kwargs(self):
         return self._meta.default_manager._get_order_with_respect_to_filter_kwargs(self)
@@ -203,13 +206,13 @@ class OrderedModelBase(models.Model):
 
     def save(self, *args, **kwargs):
         order_field_name = self.order_field_name
-        new_order_with_respect_to_fks = {getattr(self, f'{name}_id') for name in self.order_with_respect_to}
+        new_order_with_respect_to_values = self.get_ordering_with_respect_to_values()
         if getattr(self, order_field_name) is None \
-                or new_order_with_respect_to_fks != self._original_order_with_respect_to_fks:
+                or new_order_with_respect_to_values != self._original_order_with_respect_to_values:
             order = self.get_ordering_queryset().get_next_order()
             setattr(self, order_field_name, order)
         super().save(*args, **kwargs)
-        self._original_order_with_respect_to_fks = new_order_with_respect_to_fks
+        self._original_order_with_respect_to_values = new_order_with_respect_to_values
 
     def delete(self, *args, extra_update=None, **kwargs):
         qs = self.get_ordering_queryset()
