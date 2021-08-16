@@ -88,9 +88,10 @@ class OrderedModelQuerySet(models.QuerySet):
             update_kwargs.update(extra_kwargs)
         return self.update(**update_kwargs)
 
-    def bulk_create(self, objs, batch_size=None):
+    def bulk_create(self, objs, *args, **kwargs):
         order_field_name = self._get_order_field_name()
         order_with_respect_to = self.model.order_with_respect_to
+        objs = list(objs)
         if order_with_respect_to:
             order_with_respect_to_mapping = {}
             order_with_respect_to = self._get_order_with_respect_to()
@@ -108,7 +109,7 @@ class OrderedModelQuerySet(models.QuerySet):
         else:
             for order, obj in enumerate(objs, self.get_next_order()):
                 setattr(obj, order_field_name, order)
-        super().bulk_create(objs, batch_size=batch_size)
+        return super().bulk_create(objs, *args, **kwargs)
 
     def _get_order_with_respect_to_filter_kwargs(self, ref):
         order_with_respect_to = self._get_order_with_respect_to()
@@ -126,15 +127,7 @@ class OrderedModelQuerySet(models.QuerySet):
 
 
 class OrderedModelManager(models.Manager.from_queryset(OrderedModelQuerySet)):
-    def _get_model(self):
-        order_class_path = self.model.order_class_path
-        if order_class_path:
-            return import_string(order_class_path)
-        return self.model
-
-    def get_queryset(self):
-        model = self._get_model()
-        return self._queryset_class(model=model, using=self._db, hints=self._hints)
+    pass
 
 
 class OrderedModelBase(models.Model):
@@ -147,7 +140,7 @@ class OrderedModelBase(models.Model):
      - use the same field name in ``Meta.ordering``
     [optional]
      - set ``order_with_respect_to`` to limit order to a subset
-     - specify ``order_class_path`` in case of polymorpic classes
+     - specify ``order_class_path`` in case of polymorphic classes
     """
 
     objects = OrderedModelManager()
@@ -170,26 +163,31 @@ class OrderedModelBase(models.Model):
         return self._meta.default_manager._get_order_with_respect_to_filter_kwargs(self)
 
     def _validate_ordering_reference(self, ref):
-        valid = self.order_with_respect_to is None or (
-            self._get_order_with_respect_to_filter_kwargs()
-            == ref._get_order_with_respect_to_filter_kwargs()
-        )
-        if not valid:
-            raise ValueError(
-                "{0!r} can only be swapped with instances of {1!r} with equal {2!s} fields.".format(
-                    self,
-                    self._meta.default_manager._get_model(),
-                    " and ".join(
-                        [
-                            "'{}'".format(o)
-                            for o in self._get_order_with_respect_to_filter_kwargs()
-                        ]
-                    ),
+        if self.order_with_respect_to is not None:
+            self_kwargs = (
+                self._meta.default_manager._get_order_with_respect_to_filter_kwargs(
+                    self
                 )
             )
+            ref_kwargs = (
+                ref._meta.default_manager._get_order_with_respect_to_filter_kwargs(ref)
+            )
+            if self_kwargs != ref_kwargs:
+                raise ValueError(
+                    "{0!r} can only be swapped with instances of {1!r} with equal {2!s} fields.".format(
+                        self,
+                        self._meta.default_manager.model,
+                        " and ".join(["'{}'".format(o) for o in self_kwargs]),
+                    )
+                )
 
     def get_ordering_queryset(self, qs=None):
-        qs = qs or self._meta.default_manager.all()
+        if qs is None:
+            if self.order_class_path:
+                model = import_string(self.order_class_path)
+                qs = model._meta.default_manager.all()
+            else:
+                qs = self._meta.default_manager.all()
         return qs.filter_by_order_with_respect_to(self)
 
     def previous(self):
