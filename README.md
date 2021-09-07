@@ -17,14 +17,16 @@ See our [compatability notes](#compatibility-with-django-and-python) for the app
 Installation
 ------------
 
-```bash
-$ python setup.py install
-```
-
-You can use Pip:
+Please install using Pip:
 
 ```bash
 $ pip install django-ordered-model
+```
+
+Or if you have checked out the repository:
+
+```bash
+$ python setup.py install
 ```
 
 Usage
@@ -115,17 +117,17 @@ the order value of all objects that were below the moved object by one.
 
 ### Updating fields that would be updated during save()
 
-For performance reasons, the delete(), to(), below(), above(), top(), and bottom()
-methods use Django's update() method to change the order of other objects that
-are shifted as a result of one of these calls. If the model has fields that
+For performance reasons, the `delete()`, `to()`, `below()`, `above()`, `top()`, and
+`bottom()` methods use Django's `update()` method to change the order of other objects
+that are shifted as a result of one of these calls. If the model has fields that
 are typically updated in a customized save() method, or through other app level
-functionality such as DateTimeField(auto_now=True), you can add additional fields
-to be passed through to update(). This will only impact objects where their order
+functionality such as `DateTimeField(auto_now=True)`, you can add additional fields
+to be passed through to `update()`. This will only impact objects where their order
 is being shifted as a result of an operation on the target object, not the target
 object itself.
 
 ```python
-foo.to(12, extra_update={'modified': now()}
+foo.to(12, extra_update={'modified': now()})
 ```
 
 ### Get the previous or next objects
@@ -135,8 +137,8 @@ foo.previous()
 foo.next()
 ```
 
-previous() and next() get the neighbouring objects directly above of below
-within the ordered stack depending on the direction.
+The `previous()` and `next()` methods return the neighbouring objects directly above or below
+within the ordered stack.
 
 ## Subset Ordering
 
@@ -224,17 +226,43 @@ class OpenQuestion(BaseQuestion):
 
 Custom Manager and QuerySet
 -----------------
+When your model your extends `OrderedModel`, it inherits a custom `ModelManager` instance, `OrderedModelManager`, which provides additional  operations on the resulting `QuerySet`. For example an `OrderedModel` subclass called `Item` that returns a queryset from `Item.objects.all()` supports the following functions:
+
+* `above_instance(object)`,
+* `below_instance(object)`,
+* `get_min_order()`,
+* `get_max_order()`,
+* `above(index)`,
+* `below(index)`
+
+If your model defines a custom `ModelManager` such as `ItemManager` below, you may wish to extend `OrderedModelManager` to retain those functions, as follows:
+
 ```python
 from ordered_model.models import OrderedModelManager, OrderedModel
-
 
 class ItemManager(OrderedModelManager):
     pass
 
-
 class Item(OrderedModel):
     objects = ItemManager()
 ```
+
+Custom ordering field
+---------------------
+Extending `OrderedModel` creates a `models.PositiveIntegerField` field called `order` and the appropriate migrations. If you wish to use an existing model field to store the ordering, you can set the attribute `order_field_name` to match your field name:
+
+```python
+class MyModel(OrderedModelBase):
+    ...
+    sort_order = models.PositiveIntegerField(editable=False, db_index=True)
+    order_field_name = "sort_order"
+
+    class Meta:
+        ordering = ("sort_order",)
+```
+
+See `tests/models.py` object `CustomOrderFieldModel` for an example.
+
 
 Admin integration
 -----------------
@@ -306,13 +334,38 @@ class PizzaAdmin(OrderedInlineModelAdminMixin, admin.ModelAdmin):
 admin.site.register(Pizza, PizzaAdmin)
 ```
 
+**Note:** `OrderedModelAdmin` requires the inline subclasses of `OrderedTabularInline` and `OrderedStackedInline` to be listed on `inlines` so that we register appropriate URL routes. If you are using Django 3.0 feature `get_inlines()` or `get_inline_instances()` to return the list of inlines dynamically, consider it a filter and still add them to `inlines` or you might encounter a “No Reverse Match” error when accessing model change view.
+
+Re-ordering models
+------------------
+
+In certain cases the models will end up in a not properly ordered state. This can be caused
+by bypassing the 'delete' / 'save' methods, or when a user changes a foreign key of a object
+which is part of the 'order_with_respect_to' fields. You can use the following command to
+re-order one or more models.
+
+    $ ./manage.py reorder_model <app_name>.<model_name> \
+            [<app_name>.<model_name> ... ]
+
+    The arguments are as follows:
+    - `<app_name>`: Name of the application for the model.
+    - `<model_name>`: Name of the model that's an OrderedModel.
+
+
 Test suite
 ----------
 
-Requires Docker.
+To run the tests against your current environment, use:
 
 ```bash
-$ script/test
+$ django-admin test --pythonpath=. --settings=tests.settings
+```
+
+Otherwise please install `tox` and run the tests for a specific environment with `-e` or all environments:
+
+```bash
+$ tox -e py36-django30
+$ tox
 ```
 
 Compatibility with Django and Python
@@ -320,6 +373,7 @@ Compatibility with Django and Python
 
 |django-ordered-model version | Django version      | Python version
 |-----------------------------|---------------------|--------------------
+| **3.4.x**                   | **2.x**, **3.x**    | **3.5** and above
 | **3.3.x**                   | **2.x**             | **3.4** and above
 | **3.2.x**                   | **2.x**             | **3.4** and above
 | **3.1.x**                   | **2.x**             | **3.4** and above
