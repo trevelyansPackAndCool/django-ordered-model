@@ -157,7 +157,9 @@ class OrderedModelBase(models.Model):
         self._original_order_with_respect_to_values = self.get_ordering_with_respect_to_values()
 
     def get_ordering_with_respect_to_values(self):
-        return {getattr(self, name) for name in self.order_with_respect_to}
+        field_list = self.order_with_respect_to or []
+        field_list = [field_list] if type(field_list) != list else field_list
+        return {getattr(self, name) for name in field_list}
 
     def _get_order_with_respect_to_filter_kwargs(self):
         return self._meta.default_manager._get_order_with_respect_to_filter_kwargs(self)
